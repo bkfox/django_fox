@@ -12,8 +12,10 @@ __all__ = ('AgentQuerySet', 'Agent')
 
 
 class AgentQuerySet(models.QuerySet):
-    def user(self, user: User) -> AgentQuerySet:
+    def user(self, user: User, strict: bool = False) -> AgentQuerySet:
         """ Filter by user or its groups. """
+        if strict:
+            return self.filter(user=user)
         return self.filter(Q(user=user) | Q(group__in=user.groups.all())) \
                    .distinct()
 
@@ -34,3 +36,7 @@ class Agent(models.Model):
                               verbose_name=_('Group'))
 
     objects = AgentQuerySet.as_manager()
+
+    class Meta:
+        # TODO unique_together = (('user', '')
+        

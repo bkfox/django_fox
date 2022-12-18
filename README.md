@@ -6,8 +6,8 @@ Applications:
 - `api`: API related tools (consumer DRF, dispatch)
 - `caps`: capability permission system to be used internally and externally
 - `apps`: Django application (url discovery, settings, hot-reload and dependencies)
-- `utils`: various utilities (iter, functional, strings, etc.)
-- `content`: CMS
+- `utils`: various utilities (iter, functional, strings, model sets, etc.)
+- `cms`: CMS
 
 Supports for: Django Rest Framework, Django Channels
 

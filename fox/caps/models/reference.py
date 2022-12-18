@@ -7,9 +7,6 @@ import uuid
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from django.contrib.contenttypes.fields import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
-
 
 from .agent import Agent
 from .capability import Capability
@@ -20,41 +17,51 @@ __all__ = ('ReferenceQuerySet', 'Reference',)
 
 
 class ReferenceQuerySet(models.QuerySet):
+    # TODO: remove
     Agents: Union[Agent, Iterable[Agent]]
 
     def subsets(self, reference: Reference) -> ReferenceQuerySet:
         """ Return references shared from provided one. """
         return self.filter(origin=reference)
 
-    def emitter(self, agents: Agents) -> ReferenceQuerySet:
+    def emitter(self, agents: Agent) -> ReferenceQuerySet:
         """
         References for the provided Agent emitter
-        :param Agent agents: single Agent or iterable of Agents .
+        :param Agent agents: single Agent.
         """
-        if isinstance(agents, self.model):
-            return self.filter(emitter=agents)
-        return self.filter(emitter__in=agents)
+        return self.filter(emitter=agents)
 
-    def receiver(self, agents: Agents) -> ReferenceQuerySet:
+    def receiver(self, agents: Agent) -> ReferenceQuerySet:
         """
         References for the provided Agent receiver
-        :param Agent agents: single Agent or iterable of Agents .
+        :param Agent agents: single Agent.
         """
-        if isinstance(agents, self.model):
-            return self.filter(receiver=agents)
-        return self.filter(receiver__in=agents)
+        return self.filter(receiver=agents)
 
-    def ref(self, receiver: Agents, ref: uuid.UUID) -> ReferenceQuerySet:
-        """ References for the external ref. """
-        return self.filter(ref=ref).receiver(receiver)
+    def ref(self, receiver: Agent, ref: uuid.UUID) -> ReferenceQuerySet:
+        """ Reference by ref and receiver. """
+        return self.receiver(receiver).get(ref=ref)
+
+    def refs(self, receiver: Agent, refs: Iterable[uuid.UUID]) \
+            -> ReferenceQuerySet:
+        """ References by ref and receiver. """
+        return self.receiver(receiver).filter(ref__in=refs)
 
 
-class Reference(BaseCapabilitySet):
+class Reference(BaseCapabilitySet, models.Model):
     """
     Holds a reference to an object with capabilities.
 
     A Reference must always be fetched with a requerring Agent.
     """
+    # FIXME: enforce:
+    # - that all Reference on platform inherits from a single `origin`
+    #   root object. It may also be interesting to allow extending
+    #   existing references' capabilities recursively.
+    # - emitter to always be the same as origin's
+    #   potentially: RelatedField that fetch value from related object
+    #   as in Odoo
+    # - check capabilities origins
     ref = models.UUIDField(_('Public Reference'), default=uuid.uuid4,
                            db_index=True)
     """ Public reference used in API and with the external world """
@@ -68,14 +75,12 @@ class Reference(BaseCapabilitySet):
     """ Agent emitting the reference. """
     receiver = models.ForeignKey(Agent, models.CASCADE,)
     """ Agent receiving capability. """
+    target = models.ForeignKey('ConcreteObject', models.CASCADE)
+    """ Reference's target. """
 
-    target_id = models.PositiveIntegerField(_('Target ID'), db_index=True)
-    """ Target object id. """
-    target_model = models.ForeignKey(ContentType, models.CASCADE,
-                                     verbose_name=_('Target Model'))
-    """ Target object model. """
-    target = GenericForeignKey('target_model', 'target_id')
-    """ Target. """
+    class Meta:
+        abstract = True
+        unique_together = (('receiver', 'target', 'emitter'),)
 
     def is_derived(self, other: Reference) -> bool:
         if other.depth < self.depth or self.target != other.target:
