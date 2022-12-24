@@ -16,7 +16,7 @@ __all__ = ('CapabilityQuerySet', 'Capability')
 
 
 class CapabilityQuerySet(models.QuerySet):
-    def _get_items_queryset(self, items) -> models.QuerySet:
+    def _get_items_queryset(self, items) -> Union[models.QuerySet, None]:
         """ Get or create capabilities from database. """
         q_objects = (Q(name=r.name, max_derive=r.max_derive) for r in items)
         query = functools.reduce(operator.or_, q_objects)
@@ -28,6 +28,9 @@ class CapabilityQuerySet(models.QuerySet):
         Retrieve capabilities from database, create it if missing. Subset's
         items are updated.
         """
+        if not items:
+            return self.none()
+
         queryset = self._get_items_queryset(items)
         # force queryset to use a different cache, in order to return it
         # unevaluated
@@ -50,7 +53,7 @@ class Capability(models.Model):
     A single capability. Provide permission for a specific action.
     Capability are stored as unique for each action/max_derive couple.
     """
-    IntoValue: Union[tuple[str, str], list[str], Capability]
+    IntoValue: Union[tuple[str, str], list[str], Capability, str]
 
     name = models.CharField(_('Action'), max_length=32, db_index=True)
     max_derive = models.PositiveIntegerField(
@@ -58,20 +61,23 @@ class Capability(models.Model):
 
     objects = CapabilityQuerySet.as_manager()
 
+    class Meta:
+        unique_together = (('name', 'max_derive'),)
+
     @classmethod
     def into(cls, value: IntoValue):
         """
         Return a Capability based on value.
 
-        Value formats: `(name, max_derive)`, `{name: _, max_derive: _}`,
-        `Capability` (returned as is in this case)
+        Value formats: `name`, `(name, max_derive)`, `Capability` (returned
+        as is in this case)
         """
         if isinstance(value, (list, tuple)):
             return cls(name=value[0], max_derive=value[1])
-        if isinstance(value, dict):
-            return cls(**value)
         if isinstance(value, Capability):
             return value
+        if isinstance(value, str):
+            return cls(name=value, max_derive=0)
         raise NotImplementedError('Provided values are not supported')
 
     def can_derive(self, max_derive: Union[None, int] = None) -> bool:
@@ -98,6 +104,10 @@ class Capability(models.Model):
         return self.name == capability.name and \
             self.can_derive(capability.max_derive)
 
+    def __str__(self):
+        return 'Capability(pk={}, name="{}", max_derive={})'.format(
+            self.pk, self.name, self.max_derive)
+
     def __contains__(self, other: Capability):
         """
         Return True if other `capability` is derived from `self`.
@@ -105,9 +115,8 @@ class Capability(models.Model):
         return self.is_derived(other)
 
     def __eq__(self, other: Capability):
+        if not isinstance(other, Capability):
+            return False
         if self.pk and other.pk:
             return self.pk == other.pk
         return self.name == other.name and self.max_derive == other.max_derive
-
-    class Meta:
-        unique_together = ('name', 'max_derive')

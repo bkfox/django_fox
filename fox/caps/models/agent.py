@@ -37,6 +37,5 @@ class Agent(models.Model):
 
     objects = AgentQuerySet.as_manager()
 
-    class Meta:
-        # TODO unique_together = (('user', '')
-        
+    # class Meta:
+    # TODO unique_together = (('user', '')

@@ -40,11 +40,12 @@ class CapabilityTestCase(TestCase):
         values = (
             (expected.name, expected.max_derive),
             [expected.name, expected.max_derive],
-            {'name': expected.name, 'max_derive': expected.max_derive},
             Capability(name=expected.name, max_derive=expected.max_derive))
         for value in values:
             capability = Capability.into(value)
             self.assertEqual(expected, capability)
+
+        # TODO string -> max_derive=0
 
     def test_into_raises(self):
         with self.assertRaises(NotImplementedError):

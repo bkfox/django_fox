@@ -1,6 +1,5 @@
 from __future__ import annotations
 from collections.abc import Iterable
-from typing import Union
 
 from django.core.exceptions import PermissionDenied
 from django.utils.translation import gettext as __
@@ -13,10 +12,13 @@ __all__ = ('BaseCapabilitySet', 'CapabilitySet')
 
 class BaseCapabilitySet:
     """ Handle a set of capabilities. """
-    DeriveItems: Iterable[Union[str, Capability.IntoValue]]
+    DeriveItems: Capability.IntoValue
     capabilities = None
 
-    def is_derived(self, other: CapabilitySet) -> bool:
+    def get_capabilities(self):
+        return self.capabilities
+
+    def is_derived(self, other: BaseCapabilitySet) -> bool:
         """
         Return True if `capabilities` iterable is a subset of self.
 
@@ -25,8 +27,8 @@ class BaseCapabilitySet:
           (cf. `Capability.is_subset`)
         - there is no capability inside subset that are not in set.
         """
-        items = other.capabilities
-        capabilities = {c.name: c for c in self.capabilities}
+        items = other.get_capabilities()
+        capabilities = {c.name: c for c in self.get_capabilities()}
         for item in items:
             capability = capabilities.get(item.name)
             if not capability or not capability.is_derived(item):
@@ -37,21 +39,28 @@ class BaseCapabilitySet:
         """
         Derive all capabilities from this set using provided optionnal
         iterator.
-        :return an array of Capability instances (may not all be saved).
-        """
-        if items is None:
-            return [Capability(name=r.name, max_derive=0)
-                    for r in self.capabilities]
-        return self._derive_caps(self.capabilities, items)
 
-    async def aderive_caps(self, items: DeriveItems = None) -> list[Capability]:
-        """
-        Async version of `derive_caps`.
+        If `items` is not provided, derive capabilities from self, without
+        allowing them to be shared.
+        :return an array of saved Capability instances.
         """
         if items is None:
-            return [Capability(name=r.name, max_derive=0)
-                    async for r in self.capabilities]
-        return self._derive_caps((r async for r in self.capabilities), items)
+            items = [r.derive(max_derive=0) for r in self.get_capabilities()
+                     if r.can_derive(0)]
+        else:
+            items = self._derive_caps(self.get_capabilities(), items)
+        return Capability.objects.get_or_create_many(items) if items else None
+
+    # async def aderive_caps(self, items: DeriveItems = None) -> list[Capability]:
+    #     """
+    #     Async version of `derive_caps`.
+    #     """
+    #     if items is None:
+    #         items = [r.derive(max_derive=0) for r in self.get_capabilities()
+    #                  if r.can_derive(0)]
+    #     else:
+    #         items = self._derive_caps(self.get_capabilities(), items)
+    #     return Capability.objects.get_or_create_many(items)
 
     def _derive_caps(self, source: Iterable[Capability],
                      items: DeriveItems) -> list[Capability]:
@@ -61,8 +70,6 @@ class BaseCapabilitySet:
         for item in items:
             item = Capability.into(item)
             capability = by_name.get(item.name)
-            if capability and item.max_derive is None:
-                item.max_derive = capability.max_derive-1
             if not capability or not capability.is_derived(item):
                 denied.append(item.name)
             else:
@@ -77,13 +84,24 @@ class BaseCapabilitySet:
 
 class CapabilitySet(BaseCapabilitySet):
     def __init__(self, capabilities: Iterable[Capability]):
-        self.capabilities = list(capabilities)
+        self.capabilities = capabilities and list(capabilities) or []
 
     def derive(self, items: Capability.DeriveItems = None, **init_kwargs) \
             -> CapabilitySet:
         """
-        Derive this `CapabilitySet` from `self`.
+        Derive this `CapabilitySet` from `self`. Dont save new capabilities
+        of new subset.
         """
         capabilities = self.derive_caps(items)
-        capabilities = Capability.objects.bulk_create_many(capabilities)
+        # capabilities = Capability.objects.bulk_create_many(capabilities)
+        return type(self)(capabilities, **init_kwargs)
+
+    async def aderive(self, items: Capability.DeriveItems = None, **init_kwargs) \
+            -> CapabilitySet:
+        """
+        Async version of `derive`.
+        """
+        capabilities = await self.aderive_caps(items)
+        # capabilities = await Capability.objects.abulk_create_many(capabilities)
+        # capabilities = (r async for r in capabilities)
         return type(self)(capabilities, **init_kwargs)
