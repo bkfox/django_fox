@@ -1,5 +1,6 @@
 from __future__ import annotations
 from collections.abc import Iterable
+from typing import Union
 
 from django.core.exceptions import PermissionDenied
 from django.utils.translation import gettext as __
@@ -17,6 +18,12 @@ class BaseCapabilitySet:
 
     def get_capabilities(self):
         return self.capabilities
+
+    # TODO: test
+    def get_capability(self, name: str) -> Union[Capability, None]:
+        """ Get capability by name or None """
+        return next((r for r in self.get_capabilities() if r.name == name),
+                    None)
 
     def is_derived(self, other: BaseCapabilitySet) -> bool:
         """

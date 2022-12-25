@@ -52,6 +52,8 @@ class ReferenceQuerySet(models.QuerySet):
     # TODO: bulk_update -> is_valid()
 
 
+# TODO:
+# - merge existing references
 class Reference(BaseCapabilitySet, models.Model):
     """
     Reference are set of capabilities targeting a specific object.

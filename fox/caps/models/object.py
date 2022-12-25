@@ -66,30 +66,33 @@ class ObjectBase(models.base.ModelBase):
         return new_class
 
 
+# TODO: tests
 class ObjectQuerySet(models.QuerySet):
     """ QuerySet for Objects. """
 
-    def ref(self, receiver: Agent, ref: UUID):
+    def receiver(self, receiver: Agent) -> ObjectQuerySet:
+        """ Filter object for provided  """
+        refs = self.models.Reference.objects.receiver(receiver)
+        return self._select_references(refs)
+
+    def ref(self, receiver: Agent, ref: UUID) -> ObjectQuerySet:
         """ Return reference for provided receiver and ref. """
         refs = self.model.Reference.objects.refs(receiver, [ref])
-        fk_field = self.model.Reference._meta.get_field('target')
-        lookup = fk_field.remote_field.get_accessor_name()
-        prefetch = Prefetch(lookup, refs, '_agent_reference_set')
+        return self._select_references(refs).get()
 
-        refs = refs.filter(target=OuterRef('pk'))
-        return self.annotate(reference_id=Subquery(refs.values('id')[:1])) \
-                   .exclude(reference_id__isnull=True) \
-                   .prefetch_related(prefetch) \
-                   .get()
-
-    def refs(self, receiver: Agent, refs: Iterable[UUID]):
+    def refs(self, receiver: Agent, refs: Iterable[UUID]) -> ObjectQuerySet:
         """ Return references for provided receiver and refs. """
         refs = self.model.Reference.objects.refs(receiver, refs)
+        return self._select_references(refs)
+
+    def _select_references(self, refs_queryset: models.QuerySet) \
+            -> ObjectQuerySet:
+        """ Add references prefetch for objects. """
         fk_field = self.model.Reference._meta.get_field('target')
         lookup = fk_field.remote_field.get_accessor_name()
-        prefetch = Prefetch(lookup, refs, '_agent_reference_set')
+        prefetch = Prefetch(lookup, refs_queryset, '_agent_reference_set')
 
-        refs = refs.filter(target=OuterRef('pk'))
+        refs = refs_queryset.filter(target=OuterRef('pk'))
         return self.annotate(reference_id=Subquery(refs.values('id')[:1])) \
                    .exclude(reference_id__isnull=True) \
                    .prefetch_related(prefetch)

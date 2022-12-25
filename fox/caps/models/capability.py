@@ -64,6 +64,11 @@ class Capability(models.Model):
     class Meta:
         unique_together = (('name', 'max_derive'),)
 
+    @staticmethod
+    def get_name(model, action):
+        """ Return capability name for a specific model and action """
+        return model._meta.db_alias + '_' + action
+
     @classmethod
     def into(cls, value: IntoValue):
         """
