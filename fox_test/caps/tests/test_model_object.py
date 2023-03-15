@@ -7,8 +7,6 @@ from fox.caps.models.object import Object, ObjectBase
 from fox.utils.test import assertCountEqual
 from fox_test.caps.models import AbstractObject, ConcreteObject
 
-from .test_reference import TestBaseReference
-
 __all__ = (
     "TestObjectManager",
     "TestObjectQuerySet",
@@ -62,28 +60,28 @@ class TestObjectManager:
         assert issubclass(result.Reference, Reference)
 
 
-class TestObjectQuerySet(TestBaseReference):
-    def test_ref(self):
-        for ref in self.refs:
+class TestObjectQuerySet:
+    def test_ref(self, refs):
+        for ref in refs:
             result = ConcreteObject.objects.ref(ref.receiver, ref.ref)
             assert result is not None
             assert ref == result.reference
 
-    def test_ref_wrong_agent(self):
-        for ref in self.refs:
-            agents = (r for r in self.agents if r != ref.receiver)
+    def test_ref_wrong_agent(self, refs, agents):
+        for ref in refs:
+            agents = (r for r in agents if r != ref.receiver)
             for agent in agents:
                 with pytest.raises(ConcreteObject.DoesNotExist):
                     ConcreteObject.objects.ref(agent, ref.ref)
 
-    def test_refs(self):
-        for agent in self.agents:
-            refs = [r for r in self.refs if r.receiver == agent]
+    def test_refs(self, agents, refs):
+        for agent in agents:
+            refs = [r for r in refs if r.receiver == agent]
             result = ConcreteObject.objects.refs(agent, [r.ref for r in refs])
             assertCountEqual(refs, (r.reference for r in result))
 
-    def test_refs_wrong_refs(self):
-        for agent in self.agents:
-            refs = [r for r in self.refs if r.receiver != agent]
+    def test_refs_wrong_refs(self, agents, refs):
+        for agent in agents:
+            refs = [r for r in refs if r.receiver != agent]
             result = ConcreteObject.objects.refs(agent, [r.ref for r in refs])
             assert not result.exists()
