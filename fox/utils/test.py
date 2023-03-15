@@ -1,8 +1,18 @@
 """Provide Django testing utilities."""
+import unittest
+
 from django.db import connection, models
 from django.test import TestCase
 
 __all__ = ("ModelMixinTestCase",)
+
+
+_test_case = unittest.TestCase()
+
+
+def assertCountEqual(a, b):
+    """Short-hand for unittest's assertCountEqual."""
+    return _test_case.assertCountEqual(a, b)
 
 
 class ModelMixinTestCase(TestCase):
