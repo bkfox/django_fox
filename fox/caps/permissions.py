@@ -1,16 +1,17 @@
-"""
-Provide Django Rest Framework permissions to work with capabilities.
-"""
+"""Provide Django Rest Framework permissions to work with capabilities."""
 from rest_framework.permissions import BasePermission
 
 from fox.caps.models import Capability, Object
 
-
-__all__ = ('IsAllowed', 'IsActionAllowed',)
+__all__ = (
+    "IsAllowed",
+    "IsActionAllowed",
+)
 
 
 class IsAllowed(BasePermission):
-    """ Return True if capability is allowed. """
+    """Return True if capability is allowed."""
+
     capability_name = None
 
     def __init__(self, capability_name=None):
@@ -18,25 +19,24 @@ class IsAllowed(BasePermission):
             self.capability_name = capability_name
 
     def has_object_permission(self, request, view, obj):
-        return isinstance(obj, Object) and \
-            bool(obj.reference.get_capability(self.capability_name))
+        return isinstance(obj, Object) and bool(
+            obj.reference.get_capability(self.capability_name)
+        )
 
 
 class IsActionAllowed(BasePermission):
-    """
-    Permission allowed for a specific action and object. It uses
-    `Capability.get_name()` to get name from object's model and view
-    action.
+    """Permission allowed for a specific action and object. It uses
+    `Capability.get_name()` to get name from object's model and view action.
 
-    Objects must be instances of `fox.caps.Object`.
-    Retrieve action name from `view.action` (defaults to self's `action`).
+    Objects must be instances of `fox.caps.Object`. Retrieve action name
+    from `view.action` (defaults to self's `action`).
     """
 
     def __init__(self, action=None):
         self.action = action
 
     def has_object_permission(self, request, view, obj):
-        action = getattr(view, 'action', self.action)
+        action = getattr(view, "action", self.action)
         if not isinstance(obj, Object) or action is None:
             return False
 

@@ -13,5 +13,4 @@ Supports for: Django Rest Framework, Django Channels
 
 Assets:
 - `api`: handle API connection with the server (XHR, WebSockets)
-- `vue`: VueJS utilities 
-
+- `vue`: VueJS utilities

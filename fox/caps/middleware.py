@@ -1,61 +1,54 @@
-from django.middleware import
+from django.http import HttpRequest
 
-from .models import Context, SiteContext
+from .models import Agent, AgentQuerySet
 
-
-__all__ = ('AgentMiddleware',)
+__all__ = ("AgentMiddleware",)
 
 
 class AgentMiddleware:
-    """
-    Provides identities for request's user.
+    """Fetch request user's active agent, and assign it to
+    ``request.agent``."""
 
-    Current identity id can be specified with ``pepr.core.identity``
-    cookie.
-
-    Request will have two extra attributes:
-    - ``identity``: current identity;
-    - ``identities``: queryset of all available identities for user;
-    - ``role``: current site role;
-    """
-    context_class = Context
+    agent_class = Agent
+    """Agent model class to use."""
+    agent_cookie_key = "fox.caps.agent"
+    """Cookie used to get agent."""
 
     def __init__(self, get_response):
         self.get_response = get_response
 
-    def __call__(self, request):
-        self.get_identity(request)
-        self.get_role(request)
+    def __call__(self, request: HttpRequest):
+        agents = self.get_agents(request)
+        request.agent = self.get_agent(request, agents)
         return self.get_response(request)
 
-    def get_identity(self, request):
-        if not hasattr(request, 'user'):
-            raise RuntimeError(
-                "AgentMiddleware requires Django's AuthenticationMiddleware.")
-        identity, identities = self.context_class.objects.get_identities(
-            request.user, request.COOKIES.get('pepr.core.identity')
+    def get_agents(self, request: HttpRequest) -> AgentQuerySet:
+        """Return queryset for user's agents, ordered by ``-is_default``."""
+        return Agent.objects.user(request.user, strict=False).order_by(
+            "-is_default"
         )
-        if identity:
-            identity.identity_user = request.user
 
-        request.identity, request.identities = identity, identities
+    def get_agent(self, request: HttpRequest, agents: AgentQuerySet) -> Agent:
+        """Return user's active agent."""
+        cookie = request.COOKIES.get(self.agent_cookie_key)
+        if cookie:
+            # we iterate over agents instead of fetching extra queryset
+            # this keeps cache for further operations.
+            agent = next((r for r in agents if r.ref == cookie), None)
+            if agent:
+                return agent
 
-    def get_role(self, request):
-        """ Get user's role for current site. """
-        if not hasattr(request, 'site'):
-            raise RuntimeError(
-                "AgentMiddleware requires Django's CurrentSiteMiddleware")
+        if request.user.is_anonymous:
+            return next(agents, None)
 
-        context = getattr(request.site, 'site_context', None)
-        if context is None:
-            context = self.create_site_context(request.site)
-        request.role = context and context.get_role(request.identity)
-
-    def create_site_context(self, site, save=True, **kwargs):
-        """ Create context for request's site. """
-        context = SiteContext(site=site, **kwargs)
-        if save:
-            context.save()
-        return context
-
-
+        # agents are sorted such as default are first:
+        # predicates order ensure that we return first on is_default
+        # then only if is user
+        return next(
+            (
+                r
+                for r in agents
+                if agent.is_default or agent.user_id == request.user.id
+            ),
+            None,
+        )

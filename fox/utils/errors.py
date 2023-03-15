@@ -1,14 +1,11 @@
-"""
-Provide errors and exception utilities.
-"""
+"""Provide errors and exception utilities."""
 
 
-__all__ = ('Errors',)
+__all__ = ("Errors",)
 
 
 class Errors(Exception):
-    """
-    Raise multiple errors at once, using `errors` attribute.
+    """Raise multiple errors at once, using `errors` attribute.
 
     Can be used as a context manager such as:
 
@@ -33,8 +30,8 @@ class Errors(Exception):
             raise self
 
     def __str__(self):
-        errors = [r if isinstance(r, Exception) else '{}\n{}\n'.join(r)
-                  for r in self.errors]
-        return self.message + ':\n    ' + '\n    '.join(errors) 
-
-
+        errors = [
+            r if isinstance(r, Exception) else "{}\n{}\n".join(r)
+            for r in self.errors
+        ]
+        return self.message + ":\n    " + "\n    ".join(errors)

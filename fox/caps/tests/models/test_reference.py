@@ -1,11 +1,11 @@
 import copy
 
 from django.db import models
-from fox.utils.tests import ModelMixinTestCase
+
 from fox.caps.models import Agent, Capability, Object
+from fox.utils.test import ModelMixinTestCase
 
-
-__all__ = ('ReferenceTestCase', 'ReferenceQuerySetTestCase')
+__all__ = ("ReferenceTestCase", "ReferenceQuerySetTestCase")
 
 
 class BaseReferenceTestCase(ModelMixinTestCase):
@@ -25,13 +25,15 @@ class BaseReferenceTestCase(ModelMixinTestCase):
         cls.agents = Agent(), Agent(), Agent()
         Agent.objects.bulk_create(cls.agents)
 
-        cls.actions = ['action_1', 'action_2']
+        cls.actions = ["action_1", "action_2"]
         caps = [Capability(name=r, max_derive=3) for r in cls.actions]
         cls.caps = list(Capability.objects.get_or_create_many(caps))
 
-        cls.objects = [cls.TestObject(name='object_0'),
-                       cls.TestObject(name='object_1'),
-                       cls.TestObject(name='object_2')]
+        cls.objects = [
+            cls.TestObject(name="object_0"),
+            cls.TestObject(name="object_1"),
+            cls.TestObject(name="object_2"),
+        ]
         cls.TestObject.objects.bulk_create(cls.objects)
 
         cls.refs_3 = [
@@ -40,12 +42,16 @@ class BaseReferenceTestCase(ModelMixinTestCase):
             cls.TestReference.create(cls.agents[2], cls.objects[2], cls.caps),
         ]
         caps = [(n, 2) for n in cls.actions]
-        cls.refs_2 = [cls.refs_3[0].derive(cls.agents[1], caps),
-                      cls.refs_3[1].derive(cls.agents[2], caps),
-                      cls.refs_3[2].derive(cls.agents[0], caps)]
-        cls.refs_1 = [cls.refs_2[0].derive(cls.agents[2]),
-                      cls.refs_2[1].derive(cls.agents[0]),
-                      cls.refs_2[2].derive(cls.agents[1])]
+        cls.refs_2 = [
+            cls.refs_3[0].derive(cls.agents[1], caps),
+            cls.refs_3[1].derive(cls.agents[2], caps),
+            cls.refs_3[2].derive(cls.agents[0], caps),
+        ]
+        cls.refs_1 = [
+            cls.refs_2[0].derive(cls.agents[2]),
+            cls.refs_2[1].derive(cls.agents[0]),
+            cls.refs_2[2].derive(cls.agents[1]),
+        ]
         cls.refs = cls.refs_3 + cls.refs_2 + cls.refs_1
 
 
@@ -90,8 +96,9 @@ class ReferenceTestCase(BaseReferenceTestCase):
 
     def test_create_fail_origin(self):
         with self.assertRaises(ValueError):
-            self.TestReference.create(self.agents[0], self.objects[1],
-                                      self.caps, origin=self.refs[0])
+            self.TestReference.create(
+                self.agents[0], self.objects[1], self.caps, origin=self.refs[0]
+            )
 
     def test_derive(self):
         # tested through setUpClass and is_derived/valid
@@ -102,16 +109,24 @@ class ReferenceQuerySetTestCase(BaseReferenceTestCase):
     def test_emitter(self):
         for agent in self.agents:
             for ref in self.TestReference.objects.emitter(agent):
-                self.assertEqual(agent, ref.emitter,
-                                 'for agent {}, ref: {}, ref.emitter: {}'
-                                 .format(agent.ref, ref, ref.emitter.ref))
+                self.assertEqual(
+                    agent,
+                    ref.emitter,
+                    "for agent {}, ref: {}, ref.emitter: {}".format(
+                        agent.ref, ref, ref.emitter.ref
+                    ),
+                )
 
     def test_receiver(self):
         for agent in self.agents:
             for ref in self.TestReference.objects.receiver(agent):
-                self.assertEqual(agent, ref.receiver,
-                                 'for agent {}, ref: {}, ref.receiver: {}'
-                                 .format(agent.ref, ref, ref.receiver.ref))
+                self.assertEqual(
+                    agent,
+                    ref.receiver,
+                    "for agent {}, ref: {}, ref.receiver: {}".format(
+                        agent.ref, ref, ref.receiver.ref
+                    ),
+                )
 
     test_ref_queryset = BaseReferenceTestCase.TestReference
 
@@ -125,24 +140,27 @@ class ReferenceQuerySetTestCase(BaseReferenceTestCase):
             for agent in self.agents:
                 if ref.receiver == agent:
                     continue
-                with self.assertRaises(self.TestReference.DoesNotExist,
-                                       msg='ref: {}, agent: {}'.format(
-                                           ref, agent.ref)):
+                with self.assertRaises(
+                    self.TestReference.DoesNotExist,
+                    msg="ref: {}, agent: {}".format(ref, agent.ref),
+                ):
                     self.test_ref_queryset.objects.ref(agent, ref.ref)
 
     def test_refs(self):
         for agent in self.agents:
             refs = [ref for ref in self.refs if ref.receiver == agent]
-            queryset = self.test_ref_queryset.objects \
-                           .refs(agent, set(r.ref for r in refs))
+            queryset = self.test_ref_queryset.objects.refs(
+                agent, set(r.ref for r in refs)
+            )
             items = list(queryset)
-            self.assertCountEqual(refs, items, 'agent: ' + str(agent.ref))
+            self.assertCountEqual(refs, items, "agent: " + str(agent.ref))
 
     def test_refs_wrong_agent(self):
         for agent in self.agents:
             refs = [ref for ref in self.refs if ref.receiver != agent]
-            queryset = self.test_ref_queryset.objects \
-                           .refs(agent, set(r.ref for r in refs))
-            self.assertFalse(queryset.exists(), 'agent: ' + str(agent.ref))
+            queryset = self.test_ref_queryset.objects.refs(
+                agent, set(r.ref for r in refs)
+            )
+            self.assertFalse(queryset.exists(), "agent: " + str(agent.ref))
 
     # TODO: bulk_create, bulk_update

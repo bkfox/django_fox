@@ -1,12 +1,15 @@
 from django.db import models
 from django.test import TestCase
 
-from .reference import BaseReferenceTestCase
 from fox.caps.models import Reference
-from fox.caps.models.object import Object, ObjectBase, ObjectQuerySet
+from fox.caps.models.object import Object, ObjectBase
 
+from .test_reference import BaseReferenceTestCase
 
-__all__ = ('ObjectManagerTestCase', 'ObjectQuerySetTestCase',)
+__all__ = (
+    "ObjectManagerTestCase",
+    "ObjectQuerySetTestCase",
+)
 
 
 class ParentConcrete(Object):
@@ -19,8 +22,9 @@ class ParentAbstract(Object):
     # Force reference sub-class to cover more fields
     class Reference(Reference):
         # need a concrete type here.
-        target = models.ForeignKey(ParentConcrete, models.CASCADE,
-                                   related_name='_llk')
+        target = models.ForeignKey(
+            ParentConcrete, models.CASCADE, related_name="_llk"
+        )
 
     class Meta:
         abstract = True
@@ -28,33 +32,49 @@ class ParentAbstract(Object):
 
 class ObjectManagerTestCase(TestCase):
     def test_get_reference_class_from_attrs(self):
-        result = ObjectBase.get_reference_class('test', (Object,), attrs={
-            'Reference': Reference})
+        result = ObjectBase.get_reference_class(
+            "test", (Object,), attrs={"Reference": Reference}
+        )
         self.assertIs(Reference, result)
 
     def test_get_reference_class_from_attrs_fail_reference_not_subclass(self):
         with self.assertRaises(ValueError):
             ObjectBase.get_reference_class(
-                'test', (Object,),
-                attrs={'Reference': object, '__module__': self.__module__})
+                "test",
+                (Object,),
+                attrs={"Reference": object, "__module__": self.__module__},
+            )
 
     def test_get_reference_class_from_bases(self):
         result = ObjectBase.get_reference_class(
-            'test', (ParentAbstract, ParentConcrete,),
-            attrs={'__module__': self.__module__})
-        self.assertIsNot(ParentAbstract.Reference, result,
-                         "result should not return an abstract class")
+            "test",
+            (
+                ParentAbstract,
+                ParentConcrete,
+            ),
+            attrs={"__module__": self.__module__},
+        )
+        self.assertIsNot(
+            ParentAbstract.Reference,
+            result,
+            "result should not return an abstract class",
+        )
         self.assertIs(ParentConcrete.Reference, result)
 
     def test_new_with_reference(self):
-        result = ObjectBase.__new__(ObjectBase, 'test', (ParentConcrete,),
-                                    {'__module__': self.__module__})
+        result = ObjectBase.__new__(
+            ObjectBase,
+            "test",
+            (ParentConcrete,),
+            {"__module__": self.__module__},
+        )
         self.assertTrue(issubclass(result, ParentConcrete))
         self.assertTrue(issubclass(result.Reference, Reference))
 
     def test_new_generate_reference(self):
-        result = ObjectBase.__new__(ObjectBase, 'test', (Object,),
-                                    {'__module__': self.__module__})
+        result = ObjectBase.__new__(
+            ObjectBase, "test", (Object,), {"__module__": self.__module__}
+        )
         self.assertTrue(issubclass(result, Object))
         self.assertTrue(issubclass(result.Reference, Reference))
 
@@ -84,4 +104,3 @@ class ObjectQuerySetTestCase(BaseReferenceTestCase):
             refs = [r for r in self.refs if r.receiver != agent]
             result = self.TestObject.objects.refs(agent, [r.ref for r in refs])
             self.assertFalse(result.exists())
-

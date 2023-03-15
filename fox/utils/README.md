@@ -8,5 +8,3 @@ Modules:
 - `string`: nameCase converters;
 
 TODO: tests and cleanup
-
-

@@ -10,4 +10,3 @@ Goal features:
 - [] Extensible Agent allowing to sign and verify
 - [] Authentication scheme that can be used in ActivityPub-like APIs.
 - [] Test proofed
-

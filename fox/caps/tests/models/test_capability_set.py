@@ -1,8 +1,7 @@
 from django.core.exceptions import PermissionDenied
 from django.test import TransactionTestCase
 
-
-__all__ = ('CapabilitySetTestCase',)
+__all__ = ("CapabilitySetTestCase",)
 
 
 from fox.caps.models import Capability, CapabilitySet
@@ -13,10 +12,11 @@ class CapabilitySetTestCase(TransactionTestCase):
     # TODO: derive_caps, aderive_caps, aderive
     @classmethod
     def setUpClass(cls):
-        names = ['action_1', 'action_2', 'action_3']
+        names = ["action_1", "action_2", "action_3"]
         cls.names = names
-        cls.caps_1 = [Capability(name=name, max_derive=2)
-                      for i, name in enumerate(names)]
+        cls.caps_1 = [
+            Capability(name=name, max_derive=2) for i, name in enumerate(names)
+        ]
         cls.caps_2 = [c.derive() for c in cls.caps_1]
 
         cls.set_1 = CapabilitySet(cls.caps_1)
@@ -28,13 +28,12 @@ class CapabilitySetTestCase(TransactionTestCase):
 
     def test_is_derived_with_missing_in_parent(self):
         subset = CapabilitySet(self.caps_2)
-        cap = Capability(name='missing_one', max_derive=10)
+        cap = Capability(name="missing_one", max_derive=10)
         subset.capabilities.append(cap)
         self.assertFalse(self.set_1.is_derived(subset))
 
     def test_derive_caps_without_arg(self):
-        expected = [Capability(name=name, max_derive=0)
-                    for name in self.names]
+        expected = [Capability(name=name, max_derive=0) for name in self.names]
         capabilities = self.set_1.derive_caps()
         self.assertCountEqual(expected, capabilities)
 
@@ -51,7 +50,7 @@ class CapabilitySetTestCase(TransactionTestCase):
 
     def test_derive_caps_fail_missing_cap(self):
         with self.assertRaises(PermissionDenied):
-            self.set_1.derive_caps(self.names + ['missing_one'])
+            self.set_1.derive_caps(self.names + ["missing_one"])
 
     def test_derive_caps_fail_cap_not_derived(self):
         with self.assertRaises(PermissionDenied):
@@ -63,3 +62,15 @@ class CapabilitySetTestCase(TransactionTestCase):
         set = CapabilitySet(caps)
         with self.assertRaises(PermissionDenied):
             set.derive_caps(self.names)
+
+
+#    def test_add(self):
+#        capability = Capability(name="action", max_derive=1)
+#        self.set_2.add(capability)
+#        self.assertEqual("action", self.set_2["action"].name)
+#        with self.assertRaises(KeyError):
+#            self.set_2.add(capability)
+#
+#    def test_extend(self):
+#        self.set_2.extend([Capability(name="action", max_derive=1)])
+#        self.assertEqual("action", self.set_2["action"].name)
