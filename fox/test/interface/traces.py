@@ -65,30 +65,6 @@ class Traces(dsl.NodeWithChildren):
         self.append(trace, force=force, no_exc=no_exc)
         return trace
 
-    def match(self, other: Trace | Traces) -> bool:
-        """Return True if provided trace(s) matches saved ones.
-
-        Accept either a:
-            - ``Trace``: check if any of saved trace matches provided one.
-            - ``Traces``: check if all traces matches, respecting other's order.
-        """
-        match other:
-            case Trace():
-                traces = self.traces.get(other.key)
-                return (
-                    other
-                    and any(trace.match(other) for trace in traces)
-                    or False
-                )
-            case Traces():
-                for key, traces_ in other.items():
-                    traces = self.units.get(key)
-                    if not traces:
-                        return False
-                    for trace, trace_ in zip(traces, traces_):
-                        if not trace.match(trace_):
-                            return False
-
     def find(self, trace: Trace) -> bool:
         """Return the first trace matching provided one, or None."""
         traces = self.units.get(trace.key)
@@ -110,9 +86,8 @@ class Traces(dsl.NodeWithChildren):
     def join(self, other, force=False, no_exc=False):
         """
         DSL:
-            - ``| Trace() ``: add trace to self
-            - ``| Traces() ``: add all traces to self (copying self.
-            - ``| Watch() ``: keep traces of function call
+            - ``Trace() ``: add trace to self
+            - ``Traces() ``: add all traces & expects to self.
         """
         match other:
             case Trace(key):
@@ -127,17 +102,24 @@ class Traces(dsl.NodeWithChildren):
                         self.units[key] = list(items)
                     else:
                         self.units[key].extend(items)
+                    self.expects.extend(other.expects)
             case _:
                 return super().append(other)
         return self
 
     def expect(self, other):
+        """
+        DSL:
+            - ``Trace``: watch and add to expects
+            - ``Traces``: watch and add expects (does not join traces)
+        """
         match other:
             case Trace():
                 self.watch(other.key)
             case Traces():
                 for key in other.keys():
                     self.watch(key)
+                self.expects.extend(other.expects)
             case _:
                 return super().expect(other)
         self.expects.append(other)
@@ -156,10 +138,27 @@ class Traces(dsl.NodeWithChildren):
         return True
 
     def contains(self, other):
-        """Return True if provided trace matches."""
+        """
+        DSL:
+            - ``Trace``: check if any of saved trace matches provided one.
+            - ``Traces``: check if all traces matches, respecting other's order.
+        """
         match other:
-            case Trace() | Traces():
-                return self.match(other)
+            case Trace():
+                traces = self.traces.get(other.key)
+                return (
+                    other
+                    and any(trace.match(other) for trace in traces)
+                    or False
+                )
+            case Traces():
+                for key, traces_ in other.items():
+                    traces = self.units.get(key)
+                    if not traces:
+                        return False
+                    for trace, trace_ in zip(traces, traces_):
+                        if not trace.match(trace_):
+                            return False
             case _:
                 return super().contains(other)
 
