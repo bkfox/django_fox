@@ -7,6 +7,27 @@ __all__ = ("Interface", "Predicate")
 
 
 class Interface(wrap.Wrap, dsl.Node):
+    """Wrap a target, providing tracking function calls and providing
+    assumptions about their results.
+
+    .. code-block :: python
+
+        # using without DSL
+        interface = Interface(target)
+        interface.join(Feign("func", 13))
+        interface._.func()
+        assert interface.contains(Trace("func", 13))
+
+        # with dsl:
+        with Interface(target) | Feign("func", 13) as interface:
+            interface._.func()
+            assert Trace("func", 13) in interface
+
+        # or using expect syntax:
+        with Interface(target) & Feign("func", 13) as interface:
+            interface._.func()
+    """
+
     traces: Traces = None
     assume: Assume = None
 
@@ -35,16 +56,46 @@ class Interface(wrap.Wrap, dsl.Node):
         return super().call(name, args, kwargs)
 
     def join(self, other):
+        """
+        DSL:
+            - ``Trace``, ``Traces``, ``Watch``: join into self's traces
+            - ``Feign``, ``Assume``: join into self's assume
+        """
         match other:
             case Trace() | Traces() | Watch():
                 self.traces.join(other)
             case Feign() | Assume():
                 self.assume.join(other)
+            case Interface():
+                self.assume.join(other.assume)
+                self.traces.join(other.traces)
             case _:
                 super().join(other)
         return self
 
+    def expect(self, other):
+        match other:
+            case Trace() | Traces():
+                self.traces.expect(other)
+            case Feign():
+                self.traces.expect(Trace(other.name))
+                self.assume.join(other)
+            case Assume():
+                for feign in other.values():
+                    self.traces.expect(Trace(other.name))
+                self.assume.join(other)
+            case Interface():
+                self.expect(other.assume)
+                self.expect(other.traces)
+            case _:
+                super().expect(other)
+
     def contains(self, other):
+        """
+        DSL:
+            - ``Trace``, ``Traces``, ``Watch``: check contains in self's traces
+            - ``Feign``, ``Assume``: check contains self's assume
+        """
         match other:
             case Trace() | Traces() | Watch():
                 return self.traces.contains(other)
@@ -52,6 +103,14 @@ class Interface(wrap.Wrap, dsl.Node):
                 return self.assume.contains(other)
             case _:
                 return super().contains(other)
+
+    def __enter__(self):
+        self.traces.__enter__()
+        super().__enter__(self)
+
+    def __exit__(self, *args, **kwargs):
+        self.traces.__exit__(*args, **kwargs)
+        super().__exit__(self, *args, **kwargs)
 
 
 Interface.instance_class = Interface

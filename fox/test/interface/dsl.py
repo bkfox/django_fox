@@ -1,21 +1,57 @@
+"""Provide simple operands manipulation in order to have some kind of DSL.
+
+Base object in DSL is ``Unit``. ``Node`` provides operations on itself.
+
+Operators can be chained, being executed only once ``exec()`` or ``__enter__``
+is called. It results to a copy of the first object in the chain being
+updated following the provided operators. Operators can be nested, in
+such case they will be executed when required (parent clone or exec)
+
+Operators:
+    - ``|``: join
+    - ``&``: join and expect
+    - ``in``: contains
+"""
 import copy
 
 
-class UnitMeta:
-    def __new__(metacls, name, bases, attrs):
-        cls = super(UnitMeta).__new__(metacls, name, bases, attrs)
-        cls._dsl = metacls.init_dsl(cls)
-        return cls
-
-    @classmethod
-    def init_dsl(metacls, cls):
-        dsl = cls.DSL(cls)
-        return dsl
+__all__ = ("ExpectError", "ManyErrors", "Unit", "Node", "NodeOp")
 
 
-class Unit(metaclass=UnitMeta):
-    class DSL:
-        pass
+class ExpectError(ValueError):
+    """Expectation was not met."""
+
+    pass
+
+
+class ManyErrors(Exception):
+    """Gather multiple errors at once."""
+
+    def __init__(self, msg, errors, *args, **kwargs):
+        errors_msg = "\n".join(f"    - {error}" for error in errors)
+        msg += f"\n{errors_msg}"
+        self.errors = errors
+        super().__init__(msg, *args, **kwargs)
+
+
+# class UnitMeta:
+#     def __new__(metacls, name, bases, attrs):
+#         cls = super(UnitMeta).__new__(metacls, name, bases, attrs)
+#         cls._dsl = metacls.init_dsl(cls)
+#         return cls
+#
+#     @classmethod
+#     def init_dsl(metacls, cls):
+#         dsl = cls.DSL(cls)
+#         return dsl
+
+
+class Unit:
+    key = None
+    """All units instance must provide a value for this attribute."""
+
+    def __init__(self, key=None):
+        self.key = key or (type(self).__name__ + f".{self}")
 
     def clone(self, clone=None, **init_kwargs):
         if clone is None:
@@ -40,10 +76,24 @@ class Node(Unit):
     def join(self, other):
         if isinstance(other, NodeOp):
             return self.join(other.exec())
-        raise TypeError("Invalid operand type")
+        raise TypeError(
+            f"Invalid operand type (`{self.__class__.__name__}."
+            f"join()` with `{other})`"
+        )
+
+    def expect(self, other):
+        if isinstance(other, NodeOp):
+            return self.expect(other.exec())
+        raise TypeError(
+            f"Invalid operand type (`{self.__class__.__name__}."
+            f"expect()` with `{other})`"
+        )
 
     def contains(self, other):
-        raise TypeError("Invalid operand type")
+        raise TypeError(
+            f"Invalid operand type (`{self.__class__.__name__}."
+            f"contains()` with `{other})`"
+        )
 
     def __or__(self, other):
         op = NodeOp(self)
@@ -56,6 +106,32 @@ class Node(Unit):
     def __contains__(self, other):
         self.contains(other)
         return self
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, *args, **kwargs):
+        pass
+
+
+class NodeWithChildren(Node):
+    units = None
+
+    def __init__(self):
+        self.units = {}
+        super().__init__()
+
+    def get(self, key, default=None):
+        return self.units.get(key, default)
+
+    def items(self):
+        return self.units.items()
+
+    def keys(self):
+        return self.units.keys()
+
+    def values(self):
+        return self.units.values()
 
 
 class NodeOpMeta:
@@ -78,7 +154,7 @@ class NodeOpMeta:
 
 
 class NodeOp(metaclass=NodeOpMeta):
-    map = {"__or__": "join"}
+    map = {"__or__": "join", "__contains__": "contain", "__and__": "expect"}
 
     def __init__(self, node: Unit):
         self.node = node

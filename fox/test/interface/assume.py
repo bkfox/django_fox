@@ -1,20 +1,3 @@
-"""Interfaces provides assumptions about the result of function calls. This
-module provide classes to work with it.
-
-An assumption (`Assume`) maps attribute names to feigned values, which
-are used when a function call is redirected.
-
-
-.. code-block :: python
-
-    with interface.assume(bar=8, foo="top") as assume:
-        # calls of bar() will return 8
-
-        with assume & Feign("bar", 10, 9, 8, 7):
-            # calls of bar() will return 10, next call 9, etc.
-            # ...
-            assert Trace(bar_kw="param") in assume.get("bar")
-"""
 import inspect
 
 from . import dsl
@@ -26,7 +9,8 @@ __all__ = (
 
 
 class Feign(dsl.Unit):
-    """Provide one or more values to use by assumptions.
+    """Provide one or more values to use by assumptions. It describes a
+    function results to return when called.
 
     It handles:
     - one value: among different `get`, the value is always the same
@@ -34,11 +18,11 @@ class Feign(dsl.Unit):
     - values can be callable: in such cas
     """
 
-    def __init__(self, name, *values, many=None):
-        self.name = name
+    def __init__(self, key, *values, many=None):
         self.values = values
         self.many = many if many is not None else len(values) > 1
         self.index = 0
+        super().__init__(key)
 
     def next(self, args=[], kwargs={}):
         """Get the next value for the assume and add a trace.
@@ -55,16 +39,19 @@ class Feign(dsl.Unit):
             return value(*args, **kwargs)
         return value
 
-    def clone(self, name=None):
-        clone = type(self)(name or self.name, many=self.many)
+    def clone(self, key=None):
+        """Clone self, keep the same list between instances."""
+        clone = type(self)(key or self.key, many=self.many)
         clone.values = self.values
         return clone
 
-    def __and__(self, other):
-        from .assume import Assume
-
+    def __or__(self, other):
+        """
+        DSL:
+            - ``Feign``, ``Assume``: join into provided Assume or new one.
+        """
         if isinstance(other, Feign):
-            return Assume().bind(self.name, self).bind(other.name, other)
+            return Assume().bind(self.key, self).bind(other.key, other)
         elif isinstance(other, Assume):
             return other & self
         raise TypeError(
@@ -73,15 +60,20 @@ class Feign(dsl.Unit):
         )
 
 
-class Assume(dsl.Node):
-    """Provide assumes on function results."""
+class Assume(dsl.NodeWithChildren):
+    """Provides assumptions on function results.
+
+    An assumption contains multiple Feign instance describing expected
+    results when they are called.
+    """
 
     def __init__(self, *feigns, **feigns_desc):
         """For each keyword argument, create/set an assume as key is the
         attribute name, and value a single value for all calls or Feign."""
-        self.feigns = {feign.name: feign for feign in feigns}
+        self.units = {feign.key: feign for feign in feigns}
         for name, item in feigns_desc.items():
             self.feign(name, item)
+        super().__init__()
 
     def feign(self, name, *values):
         """Set an feign by name. When item is only one value and is an instance
@@ -99,18 +91,18 @@ class Assume(dsl.Node):
         if assume.name != name:
             assume = assume.clone(name)
             assume.name = name
-        self.feigns[name] = assume
+        self.units[name] = assume
 
     def pop(self, name):
         """Remove assume with provided name."""
-        return self.feigns.pop(name, None)
+        return self.units.pop(name, None)
 
     def get(self, name):
         """
         Get an Feign instance by name
         :returns: Feign or None.
         """
-        return self.feigns.get(name)
+        return self.units.get(name)
 
     def next(self, name, args=[], kwargs={}):
         """Get feignd function result.
@@ -120,20 +112,8 @@ class Assume(dsl.Node):
         :param kwargs: keyword arguments passed to function
         :raises KeyError: no registered function with this `name`.
         """
-        item = self.feigns[name]
+        item = self.units[name]
         return item.next(args, kwargs)
-
-    def keys(self):
-        """Return feigns' names iterator."""
-        return self.feigns.keys()
-
-    def values(self):
-        """Return feigns' instances iterator."""
-        return self.feigns.values()
-
-    def items(self):
-        """Return feigns iterator of `(key, feign)`"""
-        return self.feigns.items()
 
     def clone(self):
         """Return a clone of self."""
@@ -142,21 +122,29 @@ class Assume(dsl.Node):
     def clone_feigns(self, names=None):
         """Return a dict of self's feigns clones."""
         names = names if names is not None else self.items.keys()
-        return {name: self.feigns[name].clone() for name in names}
+        return {name: self.units[name].clone() for name in names}
 
     def contains(self, other):
-        """Return True if a Feign is provided for this `name`."""
+        """
+        DSL:
+            - ``Feign``, str: check if function is feigned (by name)
+            - ``Assume``: check if all other's functions are feigned
+        """
         match other:
             case Feign():
-                return other.name in self.feigns
+                return other.name in self.units
             case str():
-                return other in self.feigns
+                return other in self.units
             case Assume():
-                return all(feign.name in self.feign for feign in other.feign)
+                return all(key in self.units for key in other.keys())
             case _:
                 return super().contains(other)
 
     def join(self, other):
+        """
+        DSL:
+            - ``Feign``, ``Assume``: join into self.
+        """
         match other:
             case Feign():
                 self.set(other)

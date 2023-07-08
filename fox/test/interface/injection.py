@@ -19,7 +19,7 @@ class Inject(wrap.Wrap):
 
         assert os.path.abspath("relative") != "/abs/path"
 
-        with iface << Feign("dirname", "/tmp"):
+        with iface | Feign("dirname", "/tmp"):
             assert os.path.abspath("relative") == "/abs/path"
             assert os.path.dirname("/abs/path") == "/tmp"
             assert not os.path.exists("/tmp/false")
@@ -33,6 +33,9 @@ class Inject(wrap.Wrap):
     def __init__(self, ns, ns_attr, *args, **kwargs):
         self.ns = ns
         self.ns_attr = ns_attr
+
+        if "key" not in kwargs:
+            kwargs["key"] = type(self).__name__ + f".{ns}.{ns_attr}"
         super().__init__(None, *args, **kwargs)
 
     @property
@@ -79,7 +82,17 @@ class Inject(wrap.Wrap):
         return self
 
     def __enter__(self):
-        return self.inject()
+        """
+        DSL:
+           - inject wrapped object into target
+        """
+        self.inject()
+        super().__enter__(self)
 
-    def __exit__(self, *_args, **_kwargs):
+    def __exit__(self, *args, **kwargs):
+        """
+        DSL:
+           - release wrapped object into target
+        """
         self.release()
+        super().__exit__(self, *args, **kwargs)

@@ -1,5 +1,4 @@
 from __future__ import annotations
-from collections import namedtuple
 
 from . import dsl
 
@@ -8,10 +7,29 @@ __all__ = ("Trace", "Traces")
 
 
 class Trace(dsl.Unit):
-    def __init__(self, name, args=None, kwargs=None):
-        self.name = name
+    """Describe a function call that happened. It is used in two different
+    ways:
+
+        - to trace a call
+        - to check if a call has been done (in Traces)
+
+    When checking a call has been done, only provided values are checked.
+    For instance:
+
+    .. code-block :: python
+
+        traces = Traces()
+        traces.trace("call", [1,2,3], {"a": "val"})
+
+        assert Trace("call", [1,2,3]) in traces
+        assert Trace("call", kwargs={"a": "val"}) in traces
+        assert Trace("call", kwargs={"a": "val", "b": "val"}) not in traces
+    """
+
+    def __init__(self, key, args=None, kwargs=None):
         self.args = args
         self.kwargs = kwargs
+        super().__init__(key)
 
     def match(self, trace: Trace) -> bool:
         return (trace.args is None or self.args == trace.args) and (
@@ -19,79 +37,134 @@ class Trace(dsl.Unit):
         )
 
 
-Watch = namedtuple("Watch", ["name"])
-"""
-DSL: trace the calls for provided name.
-"""
+class Traces(dsl.NodeWithChildren):
+    """Keep track of function calls.
 
-
-class Traces(dsl.Node):
-    """Keep trace of function calls."""
+    A function should be declared as being watched in order to be
+    tracked.
+    """
 
     traces = None
 
     def __init__(self, watch: list | tuple = []):
-        self.traces = {name: [] for name in watch}
+        self.units = {key: [] for key in watch}
+        self.expects = []
+        super().__init__()
 
-    def is_watching(self, name):
-        return name in self.traces
+    def is_watching(self, key):
+        """Return True if function is being watched."""
+        return key in self.units
 
-    def watch(self, name):
-        self.append(Watch(name))
+    def watch(self, key):
+        """Watch a provided function."""
+        self.units.setdefault(key, [])
 
-    def trace(self, name, args=None, kwargs=None, force=False, no_exc=False):
+    def trace(self, key, args=None, kwargs=None, force=False, no_exc=False):
         """Add a trace."""
-        trace = Trace(name, args, kwargs)
+        trace = Trace(key, args, kwargs)
         self.append(trace, force=force, no_exc=no_exc)
         return trace
 
-    def match(self, trace: Trace) -> bool:
-        """Return True if provided trace matches one of the saved trace."""
-        traces = self.traces.get(trace.name)
-        return traces and any(r.match(trace) for r in self.traces) or False
+    def match(self, other: Trace | Traces) -> bool:
+        """Return True if provided trace(s) matches saved ones.
+
+        Accept either a:
+            - ``Trace``: check if any of saved trace matches provided one.
+            - ``Traces``: check if all traces matches, respecting other's order.
+        """
+        match other:
+            case Trace():
+                traces = self.traces.get(other.key)
+                return (
+                    other
+                    and any(trace.match(other) for trace in traces)
+                    or False
+                )
+            case Traces():
+                for key, traces_ in other.items():
+                    traces = self.units.get(key)
+                    if not traces:
+                        return False
+                    for trace, trace_ in zip(traces, traces_):
+                        if not trace.match(trace_):
+                            return False
 
     def find(self, trace: Trace) -> bool:
         """Return the first trace matching provided one, or None."""
-        traces = self.traces.get(trace.name)
+        traces = self.units.get(trace.key)
         if not traces:
             return None
-        return next((r for r in self.traces if r.match(trace)), None)
+        return next((r for r in self.units if r.match(trace)), None)
 
     def find_all(self, trace: Trace) -> bool:
         """Return a tumple of traces matching provided one."""
-        traces = self.traces.get(trace.name)
+        traces = self.units.get(trace.key)
         if not traces:
             return tuple()
-        return tuple(r for r in self.traces if r.match(trace))
+        return tuple(r for r in self.units if r.match(trace))
 
     def clone(self):
         """Return a copy of self without previous calls."""
-        return type(self)(self.traces.keys())
+        return type(self)(self.units.keys())
 
     def join(self, other, force=False, no_exc=False):
+        """
+        DSL:
+            - ``| Trace() ``: add trace to self
+            - ``| Traces() ``: add all traces to self (copying self.
+            - ``| Watch() ``: keep traces of function call
+        """
         match other:
-            case Trace(name):
-                match name in self.traces:
+            case Trace(key):
+                match key in self.units:
                     case True:
-                        self.traces[name].append(other)
+                        self.units[key].append(other)
                     case False if force:
-                        self.traces[name] = [other]
+                        self.units[key] = [other]
             case Traces(traces):
                 for key, items in traces.items():
-                    if key not in self.traces:
-                        self.traces[key] = list(items)
+                    if key not in self.units:
+                        self.units[key] = list(items)
                     else:
-                        self.traces[key].extend(items)
-            case Watch():
-                self.traces[other.name] = []
+                        self.units[key].extend(items)
             case _:
                 return super().append(other)
         return self
 
+    def expect(self, other):
+        match other:
+            case Trace():
+                self.watch(other.key)
+            case Traces():
+                for key in other.keys():
+                    self.watch(key)
+            case _:
+                return super().expect(other)
+        self.expects.append(other)
+
+    def test_expects(self, exc=True):
+        """Test if all expectations are met.
+
+        If ``exc == True``, then raise an ``ExpectationError``.
+        """
+        for expect in self.expects:
+            match self.contains(expect):
+                case False if exc:
+                    raise dsl.ExpectError(f"Expectation not met: {expect}")
+                case False:
+                    return False
+        return True
+
     def contains(self, other):
         """Return True if provided trace matches."""
         match other:
-            case Trace():
+            case Trace() | Traces():
                 return self.match(other)
             case _:
                 return super().contains(other)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        self.test_expects()

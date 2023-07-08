@@ -28,10 +28,10 @@ class Wrapper:
         return f"{interface}::{self._interface.target}"
 
     def __enter__(self, *args, **kwargs):
-        return self._interface.target.__enter__(*args, **kwargs)
+        return self._interface.call("__enter__", *args, **kwargs)
 
     def __exit__(self, *args, **kwargs):
-        return self._interface.target.__exit__(*args, **kwargs)
+        return self._interface.call("__exit__", *args, **kwargs)
 
 
 class NodeMixin:
@@ -69,26 +69,11 @@ class Wrap(NodeMixin, dsl.Unit):
 
     .. code-block :: python
 
-        iface = (
-            Interface(target, a="attribute a")
-                << Asume(foo="foo", bar="bar")
-                << Trace("foo")
-        )
-
-        obj = iface._
-        assert obj.a == "attribute a"
-        assert obj.foo(1, a=13) == "foo"
-        assert obj.bar() == "bar"
-
-        assert Trace("foo", [1]) in iface
-        assert Trace("foo", [1], {"a": 13}) in iface
-        assert Trace("foo", [2]) not in iface
-
-        iface = iface & Assume(foo="not foo")
-        obj = iface._
-        assert obj.a == "attribute a"
-        assert obj.foo() == "not foo"
-        assert obj.bar() == "bar"
+        wrap = Wrap(target, a="attribute a")
+        wrapped = wrap._
+        assert wrapped.a == "attribute a"
+        assert wrapped.foo(1, a=13) == "foo"
+        assert wrapped.bar() == "bar"
     """
 
     _: Wrapper = None
@@ -97,10 +82,13 @@ class Wrap(NodeMixin, dsl.Unit):
 
     instance_class = None
 
-    def __init__(self, target=None, parent=None, **wrap_kwargs):
+    def __init__(self, target=None, parent=None, key=None, **wrap_kwargs):
         self.target = target
         self.parent = parent
         self._ = Wrapper(self, **wrap_kwargs)
+        if not key:
+            key = type(self).__name__ + f".{target}"
+        super().__init__(key=key)
 
     def call(self, name, args, kwargs):
         match name:
