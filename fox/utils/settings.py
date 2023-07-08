@@ -1,7 +1,6 @@
 import inspect
 
 from django.conf import settings as django_settings
-from django.db import models
 
 
 class Settings:
@@ -49,6 +48,8 @@ class Settings:
         """
         if isinstance(settings, (dict, Settings)):
             settings = settings.items()
+        else:
+            settings = ((key, getattr(settings, key)) for key in dir(settings))
         for key, value in settings:
             if hasattr(self, key) and self.is_config_item(key, value):
                 setattr(self, key, value)
@@ -68,6 +69,7 @@ class Settings:
         """Return True if key/value item is a configuration setting."""
         if key.startswith("_") or callable(value) or inspect.isclass(value):
             return False
-        if isinstance(self, models.Model) and key == "object":
-            return False
+        # FIXME: SettingsModel
+        # if isinstance(self, models.Model) and key == "objects":
+        #     return False
         return True
