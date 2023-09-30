@@ -1,3 +1,5 @@
+from __future__ import annotations
+from typing import Any
 import inspect
 
 from . import dsl
@@ -18,13 +20,13 @@ class Feign(dsl.Unit):
     - values can be callable: in such cas
     """
 
-    def __init__(self, key, *values, many=None):
+    def __init__(self, key: str, *values: list[Any], many: bool | None = None):
         self.values = values
         self.many = many if many is not None else len(values) > 1
         self.index = 0
         super().__init__(key)
 
-    def next(self, args=[], kwargs={}):
+    def next(self, args: list[Any] = [], kwargs: dict[str, Any] = {}) -> Any:
         """Get the next value for the assume and add a trace.
 
         :raises IndexError: no more values to pop.
@@ -39,13 +41,13 @@ class Feign(dsl.Unit):
             return value(*args, **kwargs)
         return value
 
-    def clone(self, key=None):
+    def clone(self, key: str = None) -> Feign:
         """Clone self, keep the same list between instances."""
         clone = type(self)(key or self.key, many=self.many)
         clone.values = self.values
         return clone
 
-    def __or__(self, other):
+    def __or__(self, other: Feign | Assume) -> Assume:
         """
         DSL:
             - ``Feign``, ``Assume``: join into provided Assume or new one.
@@ -60,14 +62,14 @@ class Feign(dsl.Unit):
         )
 
 
-class Assume(dsl.NodeWithChildren):
+class Assume(dsl.Registry):
     """Provides assumptions on function results.
 
     An assumption contains multiple Feign instance describing expected
     results when they are called.
     """
 
-    def __init__(self, *feigns, **feigns_desc):
+    def __init__(self, *feigns: list[Feign], **feigns_desc: dict[str, Any]):
         """For each keyword argument, create/set an assume as key is the
         attribute name, and value a single value for all calls or Feign."""
         self.units = {feign.key: feign for feign in feigns}
@@ -75,7 +77,7 @@ class Assume(dsl.NodeWithChildren):
             self.feign(name, item)
         super().__init__()
 
-    def feign(self, name, *values):
+    def feign(self, name: str, *values: list[Any]) -> Feign:
         """Set an feign by name. When item is only one value and is an instance
         of Feign, set it as it. Otherwise, create an instance of Feign.
 
@@ -83,28 +85,25 @@ class Assume(dsl.NodeWithChildren):
         :param Feign|Any *item: an assume or its values
         :returns: self
         """
-        self.set(Feign(name, *values))
-        return self
+        feign = Feign(name, *values)
+        self.set(feign)
+        return feign
 
-    def set(self, assume, name=None):
+    def set(self, feign: Feign, name: str | None = None) -> Feign:
         """Set an Feign by name."""
-        if assume.name != name:
-            assume = assume.clone(name)
-            assume.name = name
-        self.units[name] = assume
+        if feign.name != name:
+            feign = feign.clone(name)
+            feign.name = name
+        self.units[name] = feign
+        return feign
 
-    def pop(self, name):
+    def pop(self, name: str) -> Feign | None:
         """Remove assume with provided name."""
         return self.units.pop(name, None)
 
-    def get(self, name):
-        """
-        Get an Feign instance by name
-        :returns: Feign or None.
-        """
-        return self.units.get(name)
-
-    def next(self, name, args=[], kwargs={}):
+    def next(
+        self, name: str, args: list[Any] = [], kwargs: dict[str, Any] = {}
+    ) -> Any:
         """Get feignd function result.
 
         :param name: function name
@@ -115,16 +114,16 @@ class Assume(dsl.NodeWithChildren):
         item = self.units[name]
         return item.next(args, kwargs)
 
-    def clone(self):
+    def clone(self) -> Assume:
         """Return a clone of self."""
         return type(self)(**self._clone_feigns())
 
-    def clone_feigns(self, names=None):
+    def clone_feigns(self, names=None) -> dict:
         """Return a dict of self's feigns clones."""
         names = names if names is not None else self.items.keys()
         return {name: self.units[name].clone() for name in names}
 
-    def contains(self, other):
+    def contains(self, other: Feign | str | Assume) -> bool:
         """
         DSL:
             - ``Feign``, str: check if function is feigned (by name)
@@ -140,7 +139,7 @@ class Assume(dsl.NodeWithChildren):
             case _:
                 return super().contains(other)
 
-    def join(self, other):
+    def join(self, other: Feign | Assume) -> Assume:
         """
         DSL:
             - ``Feign``, ``Assume``: join into self.

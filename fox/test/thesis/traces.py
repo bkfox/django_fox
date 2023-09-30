@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Any
 
 from . import dsl
 
@@ -26,7 +27,9 @@ class Trace(dsl.Unit):
         assert Trace("call", kwargs={"a": "val", "b": "val"}) not in traces
     """
 
-    def __init__(self, key, args=None, kwargs=None):
+    def __init__(
+        self, key: str, args: list[Any] = None, kwargs: dict[str, Any] = None
+    ):
         self.args = args
         self.kwargs = kwargs
         super().__init__(key)
@@ -37,7 +40,7 @@ class Trace(dsl.Unit):
         )
 
 
-class Traces(dsl.NodeWithChildren):
+class Traces(dsl.Registry):
     """Keep track of function calls.
 
     A function should be declared as being watched in order to be
@@ -51,15 +54,22 @@ class Traces(dsl.NodeWithChildren):
         self.expects = []
         super().__init__()
 
-    def is_watching(self, key):
+    def is_watching(self, key: str) -> bool:
         """Return True if function is being watched."""
         return key in self.units
 
-    def watch(self, key):
+    def watch(self, key: str):
         """Watch a provided function."""
         self.units.setdefault(key, [])
 
-    def trace(self, key, args=None, kwargs=None, force=False, no_exc=False):
+    def trace(
+        self,
+        key: str,
+        args: list[Any] = None,
+        kwargs: dict[str, Any] = None,
+        force: bool = False,
+        no_exc: bool = False,
+    ) -> Trace:
         """Add a trace."""
         trace = Trace(key, args, kwargs)
         self.append(trace, force=force, no_exc=no_exc)
@@ -79,11 +89,13 @@ class Traces(dsl.NodeWithChildren):
             return tuple()
         return tuple(r for r in self.units if r.match(trace))
 
-    def clone(self):
+    def clone(self) -> Traces:
         """Return a copy of self without previous calls."""
         return type(self)(self.units.keys())
 
-    def join(self, other, force=False, no_exc=False):
+    def join(
+        self, other: Trace | Traces, force: bool = False, no_exc: bool = False
+    ) -> Traces:
         """
         DSL:
             - ``Trace() ``: add trace to self
@@ -107,7 +119,7 @@ class Traces(dsl.NodeWithChildren):
                 return super().append(other)
         return self
 
-    def expect(self, other):
+    def expect(self, other: Trace | Traces) -> Traces:
         """
         DSL:
             - ``Trace``: watch and add to expects
@@ -123,8 +135,9 @@ class Traces(dsl.NodeWithChildren):
             case _:
                 return super().expect(other)
         self.expects.append(other)
+        return self
 
-    def test_expects(self, exc=True):
+    def test_expects(self, exc: bool = True) -> bool:
         """Test if all expectations are met.
 
         If ``exc == True``, then raise an ``ExpectationError``.
@@ -137,7 +150,7 @@ class Traces(dsl.NodeWithChildren):
                     return False
         return True
 
-    def contains(self, other):
+    def contains(self, other: Trace | Traces) -> bool:
         """
         DSL:
             - ``Trace``: check if any of saved trace matches provided one.
@@ -162,7 +175,7 @@ class Traces(dsl.NodeWithChildren):
             case _:
                 return super().contains(other)
 
-    def __enter__(self):
+    def __enter__(self) -> Traces:
         return self
 
     def __exit__(self, *args, **kwargs):

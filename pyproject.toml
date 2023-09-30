@@ -10,9 +10,9 @@ authors = ["Thomas Baquet <thomas bkfox net>"]
 description = "Django tools."
 readme = "README.md"
 packages = [
-    { include = "fox/caps" },
-    { include = "fox/etl" },
-    { include = "fox/utils" }
+    { include = "caps", from="fox" },
+    { include = "etl", from="fox" },
+    { include = "utils", from="fox" }
 ]
 
 [tool.poetry.dependencies]

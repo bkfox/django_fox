@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import Any
+
+
 import inspect
 import types
 
@@ -10,54 +14,54 @@ __all__ = ("Wrapper", "Wrap")
 class Wrapper:
     """Wraps an object or a module."""
 
-    _interface = None
+    _wrap = None
     """Containing Interface."""
 
-    def __init__(self, _interface, **kwargs):
-        self._interface = _interface
+    def __init__(self, _wrap: Wrap, **kwargs):
+        self._wrap = _wrap
         self.__dict__.update(kwargs)
 
     def __call__(self, *args, **kwargs):
-        return self._interface.call("__call__", *args, **kwargs)
+        return self._wrap.call("__call__", *args, **kwargs)
 
     def __getattr__(self, attr):
-        return self._interface.getattr(attr)
+        return self._wrap.getattr(attr)
 
     def __str__(self):
-        interface = super().__str__()
-        return f"{interface}::{self._interface.target}"
+        wrap = self._wrap.__str__()
+        return f"{wrap}::{self._wrap.target}"
 
-    def __enter__(self, *args, **kwargs):
-        return self._interface.call("__enter__", *args, **kwargs)
+    def __enter__(self, *args, **kwargs) -> Any:
+        return self._wrap.call("__enter__", *args, **kwargs)
 
     def __exit__(self, *args, **kwargs):
-        return self._interface.call("__exit__", *args, **kwargs)
+        return self._wrap.call("__exit__", *args, **kwargs)
 
 
 class NodeMixin:
     @property
-    def parent(self):
+    def parent(self) -> NodeMixin | None:
         return getattr(self, "_parent", None)
 
     @parent.setter
-    def parent(self, parent):
+    def parent(self, parent: NodeMixin):
         self.set_parent(parent)
 
-    def set_parent(self, parent):
+    def set_parent(self, parent: NodeMixin):
         if self.parent:
             self.parent._imeta.remove_child(self)
         self.parent = parent
         if parent:
             parent.add_child(self)
 
-    def add_child(self, child):
+    def add_child(self, child: NodeMixin):
         """Add children interface to this one."""
         if not self.children:
             self.children = [child]
         else:
             self.children.append(child)
 
-    def remove_child(self, child):
+    def remove_child(self, child: NodeMixin):
         """Remove child interface."""
         if self.children and child in self.children:
             self.children.remove(child)
@@ -82,7 +86,13 @@ class Wrap(NodeMixin, dsl.Unit):
 
     instance_class = None
 
-    def __init__(self, target=None, parent=None, key=None, **wrap_kwargs):
+    def __init__(
+        self,
+        target: Any = None,
+        parent: Wrap = None,
+        key: str | None = None,
+        **wrap_kwargs,
+    ):
         self.target = target
         self.parent = parent
         self._ = Wrapper(self, **wrap_kwargs)
@@ -90,7 +100,7 @@ class Wrap(NodeMixin, dsl.Unit):
             key = type(self).__name__ + f".{target}"
         super().__init__(key=key)
 
-    def call(self, name, args, kwargs):
+    def call(self, name: str, args: list[Any], kwargs: dict[str, Any]):
         match name:
             case "__call__" if inspect.isclass(self.target):
                 target = self.target(*args, **kwargs)
@@ -100,7 +110,7 @@ class Wrap(NodeMixin, dsl.Unit):
             case _:
                 return getattr(target, name)(*args, **kwargs)
 
-    def getattr(self, name):
+    def getattr(self, name: str) -> Any:
         if not self.target:
             raise ValueError("No target is set on Interface.")
 
@@ -110,7 +120,7 @@ class Wrap(NodeMixin, dsl.Unit):
             return lambda *args, **kwargs: self.call(name, args, kwargs)
         return attr
 
-    def clone(self, *args, **kwargs):
+    def clone(self, *args, **kwargs) -> Wrap:
         """Return a clone of self with:
 
         - a new wrapper

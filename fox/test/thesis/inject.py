@@ -1,3 +1,5 @@
+from __future__ import annotations
+from typing import Any
 from . import wrap
 
 
@@ -30,7 +32,7 @@ class Inject(wrap.Wrap):
     ns = None
     ns_attr = None
 
-    def __init__(self, ns, ns_attr, *args, **kwargs):
+    def __init__(self, ns: Any, ns_attr: str, *args, **kwargs):
         self.ns = ns
         self.ns_attr = ns_attr
 
@@ -39,23 +41,23 @@ class Inject(wrap.Wrap):
         super().__init__(None, *args, **kwargs)
 
     @property
-    def is_injected(self):
+    def is_injected(self) -> bool:
         """True if injection is done."""
         return self.target is None
 
     @property
-    def ns_target(self):
+    def ns_target(self) -> Any:
         """Actual namespace's target (using ns.ns_attr)"""
         if self.ns and self.ns_attr:
             return getattr(self.ns, self.ns_attr, None)
         return None
 
-    def clone(self):
+    def clone(self) -> Inject:
         clone = super().clone()
         clone.target = None
         return clone
 
-    def inject(self):
+    def inject(self) -> Inject:
         """Inject interface into the namespace."""
         if self.is_injected:
             raise RuntimeError("Injection is already injected")
@@ -73,7 +75,7 @@ class Inject(wrap.Wrap):
         setattr(self.ns, self.ns_attr, self._)
         return self
 
-    def release(self):
+    def release(self) -> Inject:
         """Remove injection from previously injected parent, reset target."""
         if self.is_injected:
             if self.ns_target is self._:
@@ -81,13 +83,13 @@ class Inject(wrap.Wrap):
             delattr(self, "target")
         return self
 
-    def __enter__(self):
+    def __enter__(self) -> Inject:
         """
         DSL:
            - inject wrapped object into target
         """
         self.inject()
-        super().__enter__(self)
+        return super().__enter__(self)
 
     def __exit__(self, *args, **kwargs):
         """
