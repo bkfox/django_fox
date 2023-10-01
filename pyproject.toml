@@ -33,3 +33,4 @@ optional = true
 
 [tool.poetry.group.etl.dependencies]
 pandas = "^2.0"
+networkx = "^3.1"

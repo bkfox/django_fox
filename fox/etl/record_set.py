@@ -14,12 +14,17 @@ class Relation:
     target = None
     """Destination RecordSet."""
     column = None
-    """Column on the source record set referring to target one."""
+    """Column on the source record set referring to target's index."""
 
-    def __init__(self, source, target, column):
+    def __init__(self, source, target, column, many=False):
         self.source = source
         self.target = target
         self.column = column
+        self.many = many
+
+    @classmethod
+    def sort(self, relations):
+        pass
 
     def resolve(self, df):
         pass
@@ -28,12 +33,15 @@ class Relation:
 class RecordSet:
     """Dataframe container providing utils in order to add/store data."""
 
+    df_class = pd.DataFrame
+    """DataFrame to use as."""
     df = None
     """DataFrame holding data."""
 
-    def __init__(self, df=None, columns=None, **df_kwargs):
+    def __init__(self, df=None, columns=None, df_class=None, **df_kwargs):
         if df is None:
-            df = pd.DataFrame(columns=columns, **df_kwargs)
+            df_class = df_class or self.df_class
+            df = self.df_class(columns=columns, **df_kwargs)
         self.df = df
 
     @classmethod
