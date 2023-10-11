@@ -1,6 +1,7 @@
 __all__ = ("Pool",)
 
 
+# TODO: rename to Registry
 class Pool:
     """A Pool is the container of multiple RecordSet accessed by key."""
 

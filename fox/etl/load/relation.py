@@ -23,10 +23,19 @@ class Relation:
     def resolve(self, df):
         pass
 
-    # TODO: provide node and edges from here => this ease m2m handling
+    def _get_graph_nodes(self):
+        """Return a tuple of objects used as nodes in dependency graph."""
+        return (self.source, self.target)
+
+    def _get_graph_edges(self):
+        """Return a tuple of `(source, target)` tuples used as edges in
+        dependency graph."""
+        return ((self.source, self.target),)
 
 
 class DependencyGraph:
+    """From provided relations, create and handle a dependency graph."""
+
     graph: nx.DiGraph = None
     """The graph by itself."""
     _relations: [Relation] = None
@@ -59,18 +68,16 @@ class DependencyGraph:
         relations = tuple(relations)
         self.relations = self.relations + relations
 
-        lookups = {rel.source: self._set_node(rel.source) for rel in relations}
-        lookups.update(
-            {
-                rel.target: self._set_node(rel.target)
-                for rel in relations
-                if rel.target not in lookups
-            }
-        )
+        lookups = {
+            obj: self._set_node(obj)
+            for rel in relations
+            for obj in rel._get_graph_nodes()
+        }
 
         edges = [
-            (lookups[rel.source], lookups[rel.target], {"relation": rel})
+            (lookups[source], lookups[target], {"relation": rel})
             for rel in relations
+            for source, target in rel._get_graph_edges()
         ]
         self.graph.update(edges=edges)
 
