@@ -9,6 +9,8 @@ __all__ = ("RecordsAccessor", "DjangoAccessor")
 class RecordsAccessor:
     """This accessor allows to manipulate."""
 
+    pk_field = "pk"
+
     def __init__(self, df):
         self._validate(df)
         self.df = df
@@ -62,18 +64,27 @@ class RecordsAccessor:
         if prefix is True:
             prefix = self.get_prefix(record_class)
 
+        if self.pk_field not in fields and (prefix + self.pk_field) in self.df:
+            fields.insert(0, self.pk_field)
+
         return (
             (field, col)
             for field, col in ((field, prefix + field) for field in fields)
             if col in self.df
         )
 
-    def get_fields(self, *args, **kwargs):
+    def get_fields(self, record_class, fields=None, *args, **kwargs):
         """Return a dict of fields mapping to column names.
 
-        Same as `iter_fields()` except it returns a dict.
+        Same as `iter_fields()` except that:
+        - it returns a dict.
+        - return fields as is if it is an instance of dict (without field
+            verification).
         """
-        return dict(self.iter_fields(*args, **kwargs))
+        # FIXME: This shortcut is really hacky
+        if isinstance(fields, dict):
+            return fields
+        return dict(self.iter_fields(record_class, fields, *args, **kwargs))
 
     def iter_records(self, record_class, fields=None, prefix="", rows=None):
         """Return an iterator returning each row as record instance.
@@ -86,7 +97,13 @@ class RecordsAccessor:
             rows = self.df.iterrows()
 
         for index, row in rows:
-            attrs = {field: row[col] for field, col in fields.items()}
+            nan = row.isnull()
+            nan = {row.index[i] for i, v in enumerate(nan) if v}
+            attrs = dict(
+                (field, row[col])
+                for field, col in fields.items()
+                if col not in nan
+            )
             obj = record_class(**attrs)
             setattr(obj, "df_index", index)
             yield obj
@@ -104,7 +121,7 @@ class RecordsAccessor:
 
     _update_col = "_record_updated"
 
-    def update(self, df: pd.DataFrame, on: str = "pk", null_new: bool = True):
+    def update(self, df: pd.DataFrame, on: str = None, null_new: bool = True):
         """Update dataframe in place with provided one, using lookup key.
 
         Values are merged, NaN values filled with previous existing ones.
@@ -114,6 +131,8 @@ class RecordsAccessor:
         :return new dataframe.
         """
         df[self._update_col] = True
+        if on is None:
+            on = self.pk_field
 
         common_cols = tuple(col for col in df.columns if col in self.df)
         if null_new:
@@ -138,6 +157,8 @@ class RecordsAccessor:
 
     def updated(self):
         """Return accessor to dataframe with only updated objects."""
+        if self._update_col not in self.df:
+            return self.df.iloc[0:0]
         return self.df.loc[self.df[self._update_col]]
 
 
@@ -172,25 +193,32 @@ class DjangoAccessor(RecordsAccessor):
         :return a tuple of `[created_records], [updated_records]`.
         """
         if updated:
-            self = self.updated()
+            df = self.updated()
+            self = df.django
+        else:
+            df = self.df
 
-        df = self.df
         pk = self.get_column(model_class, "pk", prefix)
         if pk not in df:
             df.insert(0, pk, None)
 
+        fields = self.get_fields(model_class, fields, prefix)
         to_create = df.loc[df[pk].isnull()]
-        to_create = self.get_records(model_class, fields, prefix)
-
         to_update = df.loc[df[pk].notnull()]
-        to_update = self.get_records(model_class, fields, prefix)
 
+        to_create = to_create.django.get_records(model_class, fields)
+        to_update = to_update.django.get_records(model_class, fields)
+
+        fields.pop(self.pk_field, None)
         model_class.objects.bulk_create(to_create)
         model_class.objects.bulk_update(to_update, fields.keys())
 
         # FIXME: check it is okay
-        pks = {obj.df_index: obj.pk for obj in to_create}
-        df.loc[pks.keys()] = pd.Series(pks.values())
+        pks = {
+            obj.df_index: getattr(obj, self.pk_field, None)
+            for obj in to_create
+        }
+        df.loc[pks.keys(), self.pk_field] = pd.Series(pks.values())
         df.loc[self._update_col] = False
 
         return to_create, to_update
