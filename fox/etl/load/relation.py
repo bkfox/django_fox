@@ -1,4 +1,8 @@
 import networkx as nx
+import pandas as pd
+
+
+from ..pandas import DjangoAccessor
 
 
 __all__ = ("Relation",)
@@ -14,14 +18,20 @@ class Relation:
     column = None
     """Column on the source record set referring to target's index."""
 
-    def __init__(self, source, target, column, many=False):
+    def __init__(self, source, target, source_field, target_field, many=False):
         self.source = source
         self.target = target
-        self.column = column
+        self.source_field = source_field
+        self.target_field = target_field
+        self.source_col = DjangoAccessor.get_column(source_field)
+        self.target_col = DjangoAccessor.get_column(target_field)
         self.many = many
 
-    def resolve(self, df):
-        pass
+    def resolve(self, source_df, target_df):
+        sources = source_df.loc[pd.notnull(self.source_col)]
+        sources_fks = sources[self.source_col]
+        lookup = target_df[self.target_col].isin(sources_fks)
+        return target_df.loc[lookup]
 
     def _get_graph_nodes(self):
         """Return a tuple of objects used as nodes in dependency graph."""

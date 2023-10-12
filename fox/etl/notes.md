@@ -22,7 +22,9 @@ Technical principles:
 
 ### Load
 Django-Pandas tools:
-- Pandas: dataframe accessors
+- Pandas:
+    -  dataframe accessors:
+        - [?] scope accessors into a general one "fox" => "df.fox.record"
 - Django: queryset to handle dataframe
 
 Registry:
@@ -34,3 +36,13 @@ Registry:
 - Relation:
     - types: One->Many, Many->Many
     - dependency graph
+
+
+
+## Roadmap
+
+- Pandas: accessors & tests
+- Django:
+    - set up test app
+    - queryset: fix & set
+- Record Set

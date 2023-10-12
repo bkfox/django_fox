@@ -8,10 +8,10 @@ import pandas as pd
 __all__ = ("RecordSet",)
 
 
-class RecordMeta(type):
+class BaseRecord(type):
     def __new__(mcls, name, bases, attrs):
         attrs["Meta"] = mcls.get_meta_class(name, bases, attrs)
-        cls = super(RecordMeta, mcls).__new__(name, bases, attrs)
+        cls = super(BaseRecord, mcls).__new__(name, bases, attrs)
         return cls
 
     @classmethod
@@ -39,7 +39,7 @@ class RecordMeta(type):
         return meta
 
 
-class Record(metaclass=RecordMeta):
+class Record(metaclass=BaseRecord):
     """A Record is a class holding data providing fields attributes."""
 
     class Meta:
