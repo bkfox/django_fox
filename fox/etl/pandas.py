@@ -96,38 +96,49 @@ class RecordsAccessor:
         return list(self.iter_records(*args, **kwargs))
 
     def extract(self, record_class, fields: [str] = None, prefix=""):
-        """Return a new dataframe's accessor for the provided record_class."""
+        """Return a new dataframe for the provided record_class."""
         fields = self.iter_fields(record_class, fields, prefix)
         fields = dict((c, f) for f, c in fields)
         df = self.df.loc[:, list(fields.keys())]
         return df.rename(columns=fields)
 
-    _update_tag_col = "_record_updated"
+    _update_col = "_record_updated"
 
-    def update(self, df: pd.DataFrame, on: str = "pk"):
-        """Update dataframe with provided one, using lookup key.
+    def update(self, df: pd.DataFrame, on: str = "pk", null_new: bool = True):
+        """Update dataframe in place with provided one, using lookup key.
 
         Values are merged, NaN values filled with previous existing ones.
 
         :param pd.DataFrame df: insert values from this dataframe.
         :param str on: use this column to match values.
-        :return self accessor.
+        :return new dataframe.
         """
-        if self._update_tag_col not in df.columns:
-            df[self._update_tag_col] = True
+        df[self._update_col] = True
+
+        common_cols = tuple(col for col in df.columns if col in self.df)
+        if null_new:
+            creates = df.loc[df[on].isnull()]
+            df = df.loc[df[on].notnull()]
+        else:
+            creates = None
 
         common_cols = tuple(col for col in df.columns if col in self.df)
         dd = pd.merge(
             self.df, df, on=on, how="outer", suffixes=["_", None], copy=False
         )
         for col in common_cols:
-            dd[col] = dd[col].combine_first(dd.pop(col + "_"))
-        self.df = dd
-        return self
+            col_ = (col == on) and col or col + "_"
+            dd[col] = dd[col].combine_first(dd.pop(col_))
+
+        if null_new:
+            # ignore_index should be safe a long as concat order is preserved
+            dd = pd.concat([dd, creates], ignore_index=True)
+        dd.loc[dd[self._update_col].isnull(), self._update_col] = False
+        return dd
 
     def updated(self):
         """Return accessor to dataframe with only updated objects."""
-        return self.df.loc[self.df[self._update_tag_col]]
+        return self.df.loc[self.df[self._update_col]]
 
 
 @pd.api.extensions.register_dataframe_accessor("django")
@@ -180,6 +191,6 @@ class DjangoAccessor(RecordsAccessor):
         # FIXME: check it is okay
         pks = {obj.df_index: obj.pk for obj in to_create}
         df.loc[pks.keys()] = pd.Series(pks.values())
-        df.loc[self._update_tag_col] = False
+        df.loc[self._update_col] = False
 
         return to_create, to_update

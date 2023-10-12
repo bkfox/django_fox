@@ -2,7 +2,7 @@ import pytest
 from django.contrib.auth.models import Group, User
 
 from fox.caps.models import Agent, Capability, CapabilitySet
-from fox_test.caps.models import ConcreteObject, ConcreteReference
+from .app.models import ConcreteObject, ConcreteReference
 
 
 # -- Agent

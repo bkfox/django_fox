@@ -5,7 +5,7 @@ import pytest
 from fox.caps.models import Reference
 from fox.caps.models.object import Object, ObjectBase
 from fox.utils.test import assertCountEqual
-from fox_test.caps.models import AbstractObject, ConcreteObject
+from .app.models import AbstractObject, ConcreteObject
 
 __all__ = (
     "TestObjectManager",

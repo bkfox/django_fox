@@ -3,7 +3,7 @@ import copy
 import pytest
 
 from fox.utils.test import assertCountEqual
-from fox_test.caps.models import ConcreteReference
+from .app.models import ConcreteReference
 
 __all__ = ("TestReference", "TestReferenceQuerySet")
 
