@@ -9,6 +9,14 @@ Goals:
 Technical principles:
 - keep it simple, keep concerns separated
 - work as much as possible with dataframe
+-
+
+
+### Core
+- Relation
+- Schema/Mapping specification:
+    - provide list of fields to extract and unit
+    - relation ships
 
 ### Extract
 - Source Providers:

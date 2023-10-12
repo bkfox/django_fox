@@ -1,5 +1,6 @@
 from .settings import *
 
 INSTALLED_APPS += [
-    "fox_test.caps",
+    "fox.etl.tests.app"
+    "fox.caps.tests.app",
 ]
