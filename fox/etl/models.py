@@ -2,12 +2,15 @@ from django.db import models
 
 import pandas as pd
 
+from .pandas import DjangoAccessor
+
 
 __all__ = ("QuerySet", "Model")
 
 
 class QuerySet(models.QuerySet):
     df_class = pd.DataFrame
+    df_accessor_class = DjangoAccessor
 
     def from_df(self, df: pd.DataFrame, field: str = None, prefix: str = True):
         """Load items based on dataframe column. Column must match a field name
@@ -18,8 +21,10 @@ class QuerySet(models.QuerySet):
         :param str prefix: column prefix
         :return filtered queryset.
         """
+        if field is None:
+            field = "pk"
         column = df.django.get_column(self.model, field, prefix)
-        lookup = {field: df.loc[df[column].notnull(), column]}
+        lookup = {field + "__in": df.loc[df[column].notnull(), column].values}
         return self.filter(**lookup)
 
     def to_df(self, fields: [str] = None, prefix: str = True) -> pd.DataFrame:
@@ -30,8 +35,13 @@ class QuerySet(models.QuerySet):
         :param str prefix: column prefix
         :return the new ModelDataFrame.
         """
-        mapping = self.df_class.django.get_fields(self.model, fields, prefix)
-        values = self.value_list(mapping.keys())
+        if not fields:
+            fields = [f.name for f in self.model._meta.get_fields()]
+        mapping = {
+            field: self.df_accessor_class.get_column(self.model, field, prefix)
+            for field in fields
+        }
+        values = self.values_list(*mapping.keys())
         return self.df_class(values, columns=mapping.values())
 
 
